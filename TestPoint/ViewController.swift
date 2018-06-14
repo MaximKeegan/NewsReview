@@ -17,9 +17,9 @@ class ViewController: UIViewController, UISearchResultsUpdating {
         let articles: [Article]
     }
     struct Article: Decodable {
-        var author: String?
-        var description: String?
-        var urlToImage: String?
+        weak var author: String?
+        weak var description: String?
+        weak var urlToImage: String?
     }
     
     let tableView = UITableView()
@@ -77,35 +77,32 @@ class ViewController: UIViewController, UISearchResultsUpdating {
     func getDataFromAPI() {
         let appDelegate = UIApplication.shared.delegate as! AppDelegate
         let context = appDelegate.persistentContainer.viewContext
-        let url = URL(string: "https://newsapi.org/v2/everything?q=bitcoin&apiKey=d2adc8cb42a94aefb649fc5e0ca177b6")
-        let session = URLSession.shared
+        let urlString = "https://newsapi.org/v2/everything?q=bitcoin&apiKey=d2adc8cb42a94aefb649fc5e0ca177b6"
+        guard let url = URL(string: urlString) else { return }
         let semaphore = DispatchSemaphore(value: 0)
         
-        if let usableUrl = url {
-            let task = session.dataTask(with: usableUrl, completionHandler: { (data, response, error) in
-                guard let data = data else { return }
-                do {
-                    let newsData = try JSONDecoder().decode(NewsData.self, from: data)
-                    for article in newsData.articles {
-                        let newNews = News(context: context)
-                        newNews.author = article.author ?? "Без автора" as String
-                        newNews.descriptionNews = article.description ?? "Нет описания" as String
-                        newNews.url = article.urlToImage ?? "Нет ссылки на изображение" as String
-                    }
-                    
-                    do {
-                        try context.save()
-                    } catch {
-                        print("Failed saving")
-                    }
-                    
-                    semaphore.signal()
-                } catch let error {
-                    print("Error: ", error)
+        URLSession.shared.dataTask(with: url) { (data, response, error) in
+            guard let data = data else { return }
+            do {
+                let newsData = try JSONDecoder().decode(NewsData.self, from: data)
+                for article in newsData.articles {
+                    let newNews = News(context: context)
+                    newNews.author = article.author ?? "Without the author" as String
+                    newNews.descriptionNews = article.description ?? "Without the description" as String
+                    newNews.url = article.urlToImage ?? "Without the link to image" as String
                 }
-            })
-            task.resume()
-        }
+                
+                do {
+                    try context.save()
+                } catch {
+                    print("Failed saving")
+                }
+                
+                semaphore.signal()
+            } catch let error {
+                print("Error: ", error)
+            }
+        }.resume()
         semaphore.wait()
     }
 //    MARK: - A function of deleting data from CoreData
