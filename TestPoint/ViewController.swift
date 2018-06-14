@@ -11,41 +11,64 @@ import CoreData
 
 class ViewController: UIViewController, UISearchResultsUpdating {
 
+    // MARK: - Private types
+    
     struct NewsData: Decodable {
         let status: String
         let totalResults: Int
         let articles: [Article]
     }
-    struct Article: Decodable {
-        weak var author: String?
-        weak var description: String?
-        weak var urlToImage: String?
-    }
     
-    let tableView = UITableView()
+    struct Article: Decodable {
+        var author: String?
+        var description: String?
+        var urlToImage: String?
+    } 
+    
+    // MARK: - Private constants
+    
+    private let urlString = "https://newsapi.org/v2/everything?q=bitcoin&apiKey=d2adc8cb42a94aefb649fc5e0ca177b6"
+    private let cellIdentifier = "cell"
+    
+    // MARK: - Public Properties
+    
+    private let tableView = UITableView()
     let searchController = UISearchController(searchResultsController: nil)
 
     var newsList = [News]()
     var filteredData = [News]()
 
     override func viewDidLoad() {
-        
+        super .viewDidLoad()
+
         deleteAllCoreData()
         getDataFromAPI()
+
+        setupUI()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        getDataCore()
+    }
+
+    // MARK: - Setup UI
+    
+    private func setupUI() {
         
         self.title = "News Review"
-
+        
         searchController.searchBar.placeholder = "Search by author"
         searchController.searchResultsUpdater = self
         searchController.hidesNavigationBarDuringPresentation = false
         searchController.dimsBackgroundDuringPresentation = false
         tableView.tableHeaderView = searchController.searchBar
-
+        
         tableView.estimatedRowHeight = 44.0
         tableView.rowHeight = UITableViewAutomaticDimension
         tableView.dataSource = self
         tableView.register(NewsTableViewCell.self, forCellReuseIdentifier: "cell")
-
+        
         self.view.addSubview(tableView)
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.topAnchor.constraint(equalTo: view.topAnchor).isActive = true
@@ -53,18 +76,16 @@ class ViewController: UIViewController, UISearchResultsUpdating {
         tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor).isActive = true
         tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor).isActive = true
     }
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        getDataCore()
-    }
-//    MARK: - A function of getting data from CoreData
+    
+    // MARK: - A function of getting data from CoreData
+    
     func getDataCore() {
         let appDelegate = UIApplication.shared.delegate as! AppDelegate
         let context = appDelegate.persistentContainer.viewContext
         let request = News.fetchRequest() as NSFetchRequest<News>
         let sortDescriptor = NSSortDescriptor(key: "author", ascending: true)
         request.sortDescriptors = [sortDescriptor]
+        
         do {
             newsList = try context.fetch(request)
             filteredData = newsList
@@ -73,18 +94,29 @@ class ViewController: UIViewController, UISearchResultsUpdating {
         }
         self.tableView.reloadData()
     }
-    //    MARK: - A function of getting data from API
+    
+    // MARK: - A function of getting data from API
+    
     func getDataFromAPI() {
+        
         let appDelegate = UIApplication.shared.delegate as! AppDelegate
         let context = appDelegate.persistentContainer.viewContext
-        let urlString = "https://newsapi.org/v2/everything?q=bitcoin&apiKey=d2adc8cb42a94aefb649fc5e0ca177b6"
-        guard let url = URL(string: urlString) else { return }
-        let semaphore = DispatchSemaphore(value: 0)
         
+        guard let url = URL(string: urlString) else {
+            return
+        }
+        
+        let semaphore = DispatchSemaphore(value: 0)
+
         URLSession.shared.dataTask(with: url) { (data, response, error) in
-            guard let data = data else { return }
+            
+            guard let data = data else {
+                return
+            }
+            
             do {
                 let newsData = try JSONDecoder().decode(NewsData.self, from: data)
+                
                 for article in newsData.articles {
                     let newNews = News(context: context)
                     newNews.author = article.author ?? "Without the author" as String
@@ -92,11 +124,7 @@ class ViewController: UIViewController, UISearchResultsUpdating {
                     newNews.url = article.urlToImage ?? "Without the link to image" as String
                 }
                 
-                do {
-                    try context.save()
-                } catch {
-                    print("Failed saving")
-                }
+                try context.save()
                 
                 semaphore.signal()
             } catch let error {
@@ -105,7 +133,9 @@ class ViewController: UIViewController, UISearchResultsUpdating {
         }.resume()
         semaphore.wait()
     }
-//    MARK: - A function of deleting data from CoreData
+
+    // MARK: - A function of deleting data from CoreData
+    
     func deleteAllCoreData() {
         let appDelegate = UIApplication.shared.delegate as! AppDelegate
         let context = appDelegate.persistentContainer.viewContext
@@ -124,7 +154,8 @@ class ViewController: UIViewController, UISearchResultsUpdating {
         }
     }
 
-//    MARK: - A function of updating results of search
+    // MARK: - A function of updating results of search
+    
     func updateSearchResults(for searchController: UISearchController) {
         if searchController.searchBar.text! == "" {
             filteredData = newsList
@@ -143,7 +174,7 @@ extension ViewController : UITableViewDataSource {
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath) as! NewsTableViewCell
+        let cell = tableView.dequeueReusableCell(withIdentifier: cellIdentifier, for: indexPath) as! NewsTableViewCell
         cell.authorLabel.text = self.filteredData[indexPath.row].author
         cell.descriptionText.text = self.filteredData[indexPath.row].descriptionNews
         cell.urlToImg.text = self.filteredData[indexPath.row].url
